@@ -1,13 +1,13 @@
 # TactivAI Tech Support Voice Assistant - Complete Project Summary
 
-**Last Updated:** February 6, 2026
+**Last Updated:** February 10, 2026
 **GitHub:** https://github.com/TonkaStinks/TactivAI-KB-Upload-Tool
 
 ---
 
 ## What This Project Is
 
-A voice-based IT tech support assistant that answers questions by searching a knowledge base of 155 articles using RAG (Retrieval Augmented Generation). Callers dial a phone number, describe their issue, and the assistant diagnoses the problem through targeted questions, then walks them through a solution step-by-step. If the KB can't answer, the call is transferred to a human. After resolution, the assistant can email a summary.
+A voice-based IT tech support assistant that answers questions by searching a knowledge base of 155 articles using RAG (Retrieval Augmented Generation). Callers dial a phone number, describe their issue, and the assistant diagnoses the problem through targeted questions, then walks them through a solution step-by-step. If the KB can't answer, the call is transferred to a human. After resolution, the assistant can email a branded summary with the issue and resolution steps.
 
 ---
 
@@ -20,7 +20,7 @@ VAPI (Voice AI - Speech-to-Text + LLM + Text-to-Speech)
     |
     |-- Tool: TactivAI_Demo_KB --> n8n Webhook --> OpenAI Embeddings --> Supabase pgvector --> Response
     |-- Tool: TactivAI_transfer_call --> Blind transfer to +15082827112
-    |-- Tool: TactivAI_send_summary --> n8n Webhook --> Gmail (pending setup)
+    |-- Tool: TactivAI_send_summary --> n8n Webhook --> Code (Format Email) --> Respond to Webhook --> Gmail
 ```
 
 ---
@@ -34,12 +34,14 @@ VAPI (Voice AI - Speech-to-Text + LLM + Text-to-Speech)
 | **Supabase** | Vector database | udgqspastvroptzxfuug.supabase.co - pgvector similarity search |
 | **OpenAI** | Embeddings | text-embedding-3-small (1536 dimensions) |
 | **GitHub** | Code repo | github.com/TonkaStinks/TactivAI-KB-Upload-Tool |
+| **Gmail** | Email summary delivery | steve@tactivai.com (OAuth2 via n8n) |
 
 ### Credentials Required
 - OpenAI API Key
 - Supabase URL: `https://udgqspastvroptzxfuug.supabase.co`
 - Supabase Service Role Key (not anon key)
 - VAPI account with phone number
+- Gmail OAuth2 for steve@tactivai.com (configured in n8n)
 
 ---
 
@@ -47,7 +49,7 @@ VAPI (Voice AI - Speech-to-Text + LLM + Text-to-Speech)
 
 ### Assistant: `TactivAI_Demo_KB`
 - **Phone Number:** `+15087940446` (Inbound)
-- **Assistant Name:** Evan (bilingual English/Spanish)
+- **Assistant Name:** Malia (bilingual English/Spanish)
 - **Inbound Settings:** Assistant set to `TactivAI_Demo_KB`
 
 ### VAPI Tools (3 total, all attached to assistant)
@@ -69,7 +71,7 @@ VAPI (Voice AI - Speech-to-Text + LLM + Text-to-Speech)
 - **Type:** Custom Tool (webhook)
 - **Server URL:** `https://opendealflow.app.n8n.cloud/webhook/63dde889-fc92-46ce-950b-1bf7b9e81605`
 - **Parameters:** email, caller_name, issue_summary, resolution_summary, status
-- **Status:** Tool configured. n8n webhook created. Gmail node NOT yet connected (waiting for support@tactivai.com password from Dave).
+- **Status:** Fully operational. Sends branded HTML email via steve@tactivai.com.
 
 ---
 
@@ -78,7 +80,7 @@ VAPI (Voice AI - Speech-to-Text + LLM + Text-to-Speech)
 The prompt has these major sections:
 
 1. **CRITICAL CONVERSATION RULES** - Always ask for name first, make forward progress every turn, no idle phrases
-2. **IDENTITY & LANGUAGE** - Evan, bilingual English/Spanish, auto-detect language
+2. **IDENTITY & LANGUAGE** - Malia, bilingual English/Spanish, auto-detect language
 3. **NAME HANDLING** - Confirm name, strict rules on corrections, use name only at closing
 4. **KNOWLEDGE BASE USAGE** - Specific questions search KB immediately; vague issues go through diagnostic first
 5. **ISSUE INTAKE - DIAGNOSE BEFORE YOU SOLVE** - 5-step flow:
@@ -92,25 +94,65 @@ The prompt has these major sections:
 8. **GLOBAL ANSWER HANDLING** - Treat short answers as valid, acknowledge and continue
 9. **SILENCE/MISHEARING HANDLING** - Repeat after 5s silence, ask to speak up if consistent
 10. **TROUBLESHOOTING SUCCESS** - Confirm fix with "everything working normally now?"
-11. **EMAIL SUMMARY** - After success, offer email summary, spell out email, use TactivAI_send_summary tool
-12. **ESCALATION & CALL TRANSFER** - 6 trigger conditions, use TactivAI_transfer_call tool
-13. **CLOSING** - "Thanks for calling - have a great day." (once, then stop)
+11. **STEP TRACKING (INTERNAL)** - Keep mental record of every step walked through (action + outcome) for use in email summary
+12. **EMAIL SUMMARY** - After success, offer email summary. Includes letter-by-letter spell-back protocol for email address accuracy, and EMAIL CONSTRUCTION FOR TOOL CALL override that forces character-by-character reconstruction from confirmed spell-back (bypasses STT transcription errors). Uses TactivAI_send_summary tool with detailed numbered resolution steps.
+13. **ESCALATION & CALL TRANSFER** - 6 trigger conditions, use TactivAI_transfer_call tool
+14. **CLOSING** - "Thanks for calling - have a great day." (once, then stop)
 
 ---
 
 ## n8n Workflows
 
-### Workflow 1: KB Search
+### Workflow 1: KB Search (`TactivAI_Demo_KB`)
 - **Production URL:** `https://opendealflow.app.n8n.cloud/webhook/9ddfb8d7-d88f-4d62-8127-ff5e9bdb92f2`
 - **Test URL:** `https://opendealflow.app.n8n.cloud/webhook-test/9ddfb8d7-d88f-4d62-8127-ff5e9bdb92f2`
 - **Nodes:** Webhook -> Supabase Vector Store -> Clean Content -> Respond to Webhook
 - **Question path in n8n:** `{{ $json.body.message.toolCalls[0].function.arguments.question }}`
 - **CRITICAL:** After changes, must click **Publish** (not just Save)
 
-### Workflow 2: Email Summary (Incomplete)
+### Workflow 2: Email Summary (`TactivAI_Email_Summary`)
 - **Production URL:** `https://opendealflow.app.n8n.cloud/webhook/63dde889-fc92-46ce-950b-1bf7b9e81605`
-- **Status:** Webhook created. Gmail node needs password for support@tactivai.com
-- **TODO:** Add Gmail node, format email template, test end-to-end
+- **Status:** Fully operational
+- **Gmail Account:** steve@tactivai.com (OAuth2)
+- **Workflow ID:** `skAQAgaPiw6ydAV83rI0a`
+
+#### Node Order (CRITICAL - this order prevents VAPI timeout):
+```
+Webhook (POST) → Code in JavaScript (Format Email) → Respond to Webhook → Send a message (Gmail)
+```
+
+**Why this order matters:** The Respond to Webhook node must fire BEFORE Gmail sends the email. VAPI has a tool call timeout window - if Gmail is before Respond, VAPI times out waiting for the response while n8n is busy sending the email. By responding to VAPI first, the webhook returns immediately, and the email sends asynchronously after.
+
+#### Node Details:
+
+**1. Webhook**
+- Method: POST
+- Path: `63dde889-fc92-46ce-950b-1bf7b9e81605`
+- Respond: "Using Respond to Webhook Node"
+
+**2. Code in JavaScript (Format Email)**
+- Extracts: `caller_name`, `email`, `issue_summary`, `resolution_summary`, `status` from VAPI tool call arguments
+- Builds branded HTML email with:
+  - TactivAI logo header (dark background)
+  - Color-coded status banner (green for Resolved, orange for Escalated/Follow-up)
+  - Issue summary callout (yellow, left-bordered)
+  - Resolution steps callout (green, left-bordered) with auto-numbered `<ol>` list
+  - Branded footer
+- Logo URL: `https://raw.githubusercontent.com/TonkaStinks/TactivAI-KB-Upload-Tool/main/TactivAI%20logo%201920x1080.png`
+- Input path: `$input.first().json.body.message.toolCalls[0].function.arguments`
+
+**3. Respond to Webhook**
+- Respond With: JSON
+- Response Body: `{{ {"results": [{"result": "Email summary sent successfully"}]} }}`
+
+**4. Send a message (Gmail)**
+- To: `{{ $json.to }}`
+- Subject: `{{ $json.subject }}`
+- Message (HTML): `{{ $json.htmlBody }}`
+- Credential: Gmail OAuth2 (steve@tactivai.com)
+
+#### Workflow Editing Tip:
+The easiest way to modify this workflow is to **export the JSON** from n8n, edit it externally, then **reimport**. When reimporting, delete all existing nodes first to avoid duplicate nodes with "1" suffix.
 
 ---
 
@@ -192,6 +234,7 @@ $$;
 | `generate_articles.py` | AI article generator using GPT-4o-mini |
 | `demo-articles/` | 9 hand-written demo articles |
 | `generated-articles/` | 146 AI-generated articles in 4 subfolders |
+| `TactivAI logo 1920x1080.png` | Company logo used in email template header |
 | `PROJECT-SUMMARY.md` | This file |
 | `README.md` | GitHub repo README |
 | `.gitignore` | Git ignore rules |
@@ -214,7 +257,7 @@ $$;
 
 ## VAPI Request/Response Format
 
-### What n8n receives from VAPI:
+### What n8n receives from VAPI (KB Search):
 ```json
 {
   "body": {
@@ -227,6 +270,30 @@ $$;
           "name": "TactivAI_Demo_KB",
           "arguments": {
             "question": "user's question here"
+          }
+        }
+      }]
+    }
+  }
+}
+```
+
+### What n8n receives from VAPI (Email Summary):
+```json
+{
+  "body": {
+    "message": {
+      "type": "tool-calls",
+      "toolCalls": [{
+        "type": "function",
+        "function": {
+          "name": "TactivAI_send_summary",
+          "arguments": {
+            "email": "caller@example.com",
+            "caller_name": "John",
+            "issue_summary": "Caller reported network printer showing offline on Windows 11 laptop",
+            "resolution_summary": "1. Opened Settings > Devices > Printers\n2. Removed offline printer entry\n3. Clicked Add Printer and selected network printer\n4. Printed test page to confirm",
+            "status": "Resolved"
           }
         }
       }]
@@ -308,6 +375,11 @@ last_updated: 2024-12-11
 | 10 | Streamlit blocked by security app | Runs local web server | Switched to Tkinter desktop app |
 | 11 | getpass won't accept paste on Windows | Terminal limitation | Changed to `input()` instead |
 | 12 | Duplicate articles in Supabase | Accidentally uploaded twice | `DELETE FROM documents WHERE id > 163;` (or whatever the cutoff) |
+| 13 | "No result returned" from VAPI email tool | n8n Code node had empty connections (not wired to next node) | Export workflow JSON, verify connections array is not empty, reimport. Also ensure Respond to Webhook fires BEFORE Gmail send. |
+| 14 | VAPI STT misspells email addresses | Speech-to-text transcription error (e.g., "sleclair" → "slecclair") | Added EMAIL CONSTRUCTION FOR TOOL CALL section in prompt forcing LLM to reconstruct email character-by-character from confirmed spell-back, ignoring original transcription |
+| 15 | Safari blocks Gmail OAuth popup in n8n | Safari popup blocker | Safari → Settings → Websites → Pop-up Windows → Allow for app.n8n.cloud |
+| 16 | n8n import creates duplicate nodes with "1" suffix | Importing into workflow that already has nodes | Delete ALL existing nodes first, then import clean JSON |
+| 17 | Respond to Webhook JSON syntax error | Raw JSON in response body field | Use expression mode: `{{ {"results": [{"result": "..."}]} }}` |
 
 ---
 
@@ -347,14 +419,18 @@ FROM documents ORDER BY similarity DESC LIMIT 10;
 **Escalation Test (should transfer call):**
 11. "Who is the President of the United States?" (not in KB, triggers transfer)
 
+**Email Summary Test (after resolving an issue):**
+12. Resolve any issue above, confirm fix, say "yes" to email summary, provide email address with letter-by-letter spell-back
+
 ---
 
 ## Pending/TODO Items
 
-1. **Email Summary Workflow** - n8n webhook created, VAPI tool configured, but Gmail node needs support@tactivai.com password from Dave
-2. **GitHub Release** - Upload TactivAI-KB-Upload.exe as v1.0.0 release at github.com/TonkaStinks/TactivAI-KB-Upload-Tool/releases
-3. **Future: PDF Ingestion** - When handed PDF help files, use `pymupdf4llm` to convert to markdown, chunk by section (~500-800 tokens with overlap), embed each chunk separately
-4. **Future: Chunking** - Current articles are embedded whole. For longer content, split into chunks per section for more precise search results
+1. ~~**Email Summary Workflow**~~ - **DONE** (Feb 10, 2026) - Fully built and operational: Webhook → Code → Respond to Webhook → Gmail
+2. **Swap Gmail to support@tactivai.com** - Currently using steve@tactivai.com. Switch to support@tactivai.com when Dave provides the password.
+3. **GitHub Release** - Upload TactivAI-KB-Upload.exe as v1.0.0 release at github.com/TonkaStinks/TactivAI-KB-Upload-Tool/releases
+4. **Future: PDF Ingestion** - When handed PDF help files, use `pymupdf4llm` to convert to markdown, chunk by section (~500-800 tokens with overlap), embed each chunk separately
+5. **Future: Chunking** - Current articles are embedded whole. For longer content, split into chunks per section for more precise search results
 
 ---
 
